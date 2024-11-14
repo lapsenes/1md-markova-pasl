@@ -4,22 +4,28 @@ import numpy as np
 layers = 4
 
 class robot:
-    def __init__(self, height, width, grid_occupancy, x=None, y=None, theta=None):
+    def __init__(self, height, width, grid_occupancy, theta_dict, x=None, y=None):
 
         self.occupancy = grid_occupancy
         initial_value = 1 / height * width / layers
         self.knowledge = np.full(grid_occupancy.shape, initial_value)
+        self.num_robots = len(self.theta_dict)
+        self.robots = []
         self.x = x 
         self.y = y 
 
-        if self.x is None or self.y is None or self.occupancy[self.x, self.y] == 1:
-            while True:
-                self.x = random.randint(0, self.occupancy.shape[0] - 1)
-                self.y = random.randint(0, self.occupancy.shape[1] - 1)
-                if self.occupancy[self.x, self.y] == 0:
-                    break
+        for direction, theta in self.theta_dict.items():
+            if len(self.robots) < self.num_robots:
+                if self.x is None or self.y is None or self.occupancy[self.x, self.y] == 1:
+                    while True:
+                        self.x = random.randint(0, self.occupancy.shape[0] - 1)
+                        self.y = random.randint(0, self.occupancy.shape[1] - 1)
+                        if self.occupancy[self.x, self.y] == 0:
+                            print("random location allocated")
+                            break
+                self.robots.append({"x": x, "y": y, "theta": theta, "direction": direction})
 
-        self.theta = theta if theta is not None else random.choice([0, 90, 180, 270]) # its right, up, left, down
+
 
     def move(self):
         movement_probability = 0.8
