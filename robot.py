@@ -5,8 +5,8 @@ layers = 4
 
 class robot:
     def __init__(self, height, width, grid_occupancy, theta_dict, x=None, y=None):
-
         self.occupancy = grid_occupancy
+        self.theta_dict = theta_dict
         initial_value = 1 / height * width / layers
         self.knowledge = np.full(grid_occupancy.shape, initial_value)
         self.num_robots = len(self.theta_dict)
@@ -24,8 +24,14 @@ class robot:
                             print("random location allocated")
                             break
                 self.robots.append({"x": x, "y": y, "theta": theta, "direction": direction})
+    
+    
+    def __iter__(self):
+        return iter(self.robots)
 
 
+    def draw_on_map(self):
+        raise NotImplemented
 
     def move(self):
         movement_probability = 0.8

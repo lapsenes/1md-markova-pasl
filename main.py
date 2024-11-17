@@ -8,7 +8,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from robot import * 
 
 buttons = []
-grid_occupancy = 0
 location_entries = {}
 theta_dict = {
     "right": 0,    # "up" corresponds to 0 degrees (north)
@@ -30,30 +29,62 @@ def rand_grid(width, height):
     occupancy_array[np.unravel_index(indices, (width, height))] = 1
     return occupancy_array
 
-def make_grid(width, height):
+def make_grid(width, height, robots):
+    global grid_occupancy
     grid_occupancy = rand_grid(width, height)
     cmap = plt.cm.get_cmap('gray_r', 2)
     fig, axes = plt.subplots(2, 2, figsize=(10, 10))
     axes = axes.flatten()
     
-    for idx, _ in enumerate(theta_dict.items()):
-        ax = axes[idx]
-        ax.imshow(grid_occupancy, cmap=cmap, origin='upper', extent=(0, grid_occupancy.shape[1], 0, grid_occupancy.shape[0]))   
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_aspect('equal')
-        ax.grid(True)
-        ax.set_xticks(np.arange(0, width + 1, 1))
-        ax.set_yticks(np.arange(0, height + 1, 1))
-        ax.tick_params(which='both', length=0)
+    if robots is not None:
+    # Iterate over each subplot and robot (up to the number of robots)
+        for ax, robot in zip(axes, robots):
+            # Display the grid
+            ax.imshow(grid_occupancy, cmap=cmap, origin='upper', extent=(0, width, 0, height))
+            ax.set_xlabel('X')
+            ax.set_ylabel('Y')
+            ax.set_aspect('equal')
+            ax.grid(True)
+            ax.set_xticks(np.arange(0, width + 1, 1))
+            ax.set_yticks(np.arange(0, height + 1, 1))
+            ax.tick_params(which='both', length=0)
+
+            center_x = robot['x'] + 0.5
+            center_y = robot['y'] + 0.5
+            
+            # Plot a red dot for the robot position in the center of the cell
+            ax.plot(center_x, center_y, marker='o', color='red', markersize=6)
+
+            # Add an arrow representing the robot's orientation
+            if robot['direction'] in theta_dict:
+                theta = theta_dict[robot['direction']]
+                ax.arrow(center_x, center_y, 0.5 * np.cos(np.radians(theta)), 
+                            0.5 * np.sin(np.radians(theta)), head_width=0.2, head_length=0.3, 
+                            fc='blue', ec='blue')
+    else:
+        for idx, ax in enumerate(axes):
+            # Display the grid
+            ax.imshow(grid_occupancy, cmap=cmap, origin='upper', extent=(0, width, 0, height))
+            ax.set_xlabel('X')
+            ax.set_ylabel('Y')
+            ax.set_aspect('equal')
+            ax.grid(True)
+            ax.set_xticks(np.arange(0, width + 1, 1))
+            ax.set_yticks(np.arange(0, height + 1, 1))
+            ax.tick_params(which='both', length=0)
+
     plt.tight_layout()
     return fig
 
-def visualize_grid(width, height):
-    fig = make_grid(width, height)
+def visualize_grid(width, height, robots=None):
+    plt.close('all')
+    fig = make_grid(width, height, robots)
+    ax = fig.gca()  # Get the current axes from the figure
+    # Display the grid in the Tkinter interface
     canvas = FigureCanvasTkAgg(fig, master=widgets['action_frame'])
     canvas.draw()
     canvas.get_tk_widget().pack()
+
 
 def handle_submit_size(event):
     try:
@@ -95,7 +126,7 @@ def ask_robot_location(width, height):
         location_entries["x_loc_entry"] = widgets['x_loc_entry']
         location_entries["y_loc_entry"] = widgets['y_loc_entry']
         print("Entry widgets created.")
-        widgets['submit_location_button'].bind("<Button-1>", initialize_robot_thread(width, height, grid_occupancy, theta_dict))
+        widgets['submit_location_button'].bind("<Button-1>", lambda event: initialize_robot_thread(width, height, grid_occupancy, theta_dict))
         
     else:
         location_entries["x_loc_entry"].delete(0, tk.END)
@@ -106,8 +137,8 @@ def initialize_robot(height, width, grid_occupancy, theta_dict):
     try:
         x = int(widgets['x_loc_entry'].get())
         y = int(widgets['y_loc_entry'].get())
-        robots = robot.__init__(height, width, grid_occupancy, x, y, theta_dict)
-
+        robots = robot(height, width, grid_occupancy, theta_dict, x, y)
+        visualize_grid(width, height, robots)
     except ValueError as e:
         widgets['error_label'].config(text=f"Error: {e}")
 
