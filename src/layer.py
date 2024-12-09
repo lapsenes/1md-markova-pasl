@@ -1,34 +1,41 @@
 import random
 import numpy as np
+import src.shared_data as shared_data
 
 layers = 4
+"""
+pārvietojuma modelis:
+0.8: plānotā kustība notiek
+0.2: layers paliek uz vietas
+"""
 
-class robot:
-    def __init__(self, height, width, grid_occupancy, theta_dict, x=None, y=None):
+"""
+novērojumu modelis:
+attālums līdz tuvākajam šķērslim pagrieziena virzienā
+modelis:
+0.8: korekts mērījums
+0.15: nekorekts mērījums -/+ 1 solis
+0.05: jebkurš cits nekorekts mērījums
+
+"""
+
+class layer:
+    def __init__(self, width, height, theta_dict, grid_occupancy):
         self.occupancy = grid_occupancy
         self.theta_dict = theta_dict
-        initial_value = 1 / height * width / layers
-        self.knowledge = np.full(grid_occupancy.shape, initial_value)
-        self.num_robots = len(self.theta_dict)
-        self.robots = []
-        self.x = x 
-        self.y = y 
+        initial_value = 1 / (height * width - np.count_nonzero(self.occupancy == 1)) / layers
+        self.knowledge = np.zeros(grid_occupancy.shape)
+        self.knowledge[self.occupancy != 1] = initial_value
+        self.num_layers = len(self.theta_dict)
+        self.layers = []
 
         for direction, theta in self.theta_dict.items():
-            if len(self.robots) < self.num_robots:
-                if self.x is None or self.y is None or self.occupancy[self.x, self.y] == 1:
-                    while True:
-                        self.x = random.randint(0, self.occupancy.shape[0] - 1)
-                        self.y = random.randint(0, self.occupancy.shape[1] - 1)
-                        if self.occupancy[self.x, self.y] == 0:
-                            print("random location allocated")
-                            break
-                self.robots.append({"x": x, "y": y, "theta": theta, "direction": direction})
-    
+            if len(self.layers) < self.num_layers:
+                self.layers.append({"theta": theta, "direction": direction, "knowledge": self.knowledge})
+
     
     def __iter__(self):
-        return iter(self.robots)
-
+        return iter(self.layers)
 
     def draw_on_map(self):
         raise NotImplemented
