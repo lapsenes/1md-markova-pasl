@@ -146,3 +146,11 @@ def setup_screen(widgets):
     widgets['submit_measure_button'] = tk.Button(master=widgets['side_frame'], text="Veikt mērījumu", width=15, height=2)
     widgets['submit_mov_button'].pack()
     widgets['submit_measure_button'].pack()
+    widgets['submit_mov_buttonn'].bind("<Button-1>", lambda event: movement())
+    widgets['submit_measure_button'].bind("<Button-1>", lambda event: measurement())
+
+def movement():
+    raise NotImplemented
+
+def measurement():
+    results = [layer.measure() for layer in layers]
