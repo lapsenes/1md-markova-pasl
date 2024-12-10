@@ -69,7 +69,7 @@ def make_grid(width, height, layers, theta_dict, grid_occupancy):
     else:
         for idx, ax in enumerate(axes):
             # Display the grid
-            ax.imshow(grid_occupancy, cmap='gray_r', origin='upper', extent=(0, width, 0, height))
+            ax.imshow(grid_occupancy.reshape(height, width), cmap='gray_r', origin='upper', extent=(0, width, height, 0))
             ax.set_xlabel('X')
             ax.set_ylabel('Y')
             ax.set_aspect('equal')
