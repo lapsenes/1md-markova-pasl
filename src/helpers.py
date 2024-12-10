@@ -42,7 +42,7 @@ def make_grid(width, height, layers, theta_dict, grid_occupancy):
             ax.set_yticks(np.arange(0, height + 1, 1))
             ax.tick_params(which='both', length=0)
 
-            knowledge = layer.get("knowledge")
+            knowledge = layer.knowledge
 
             for i in range(knowledge.shape[0]):
                 for j in range(knowledge.shape[1]):
@@ -57,11 +57,11 @@ def make_grid(width, height, layers, theta_dict, grid_occupancy):
                         ax.text(j + 0.5, height - (i + 0.5), f'{knowledge[i, j]:.2f}', ha='center', va='center', color='black', fontsize=5)
 
             # Plot the robot position and orientation if it is the right layer
-            if shared_data.grid_args["rot"] == layer['theta']:
+            if shared_data.grid_args["rot"] == layer.theta:
                 center_x = shared_data.grid_args['x'] - 0.5
                 center_y = shared_data.grid_args['y'] - 0.5
                 ax.plot(center_x, center_y, marker='o', color='red', markersize=6)
-                theta = theta_dict[layer['direction']]
+                theta = theta_dict[layer.direction]
                 ax.arrow(center_x, center_y, 0.5 * np.cos(np.radians(theta)), 
                             0.5 * np.sin(np.radians(theta)), head_width=0.2, head_length=0.3, 
                             fc='blue', ec='blue')
@@ -135,22 +135,38 @@ def initialize_layer(window, height, width, theta_dict, grid_occupancy, widgets)
         shared_data.grid_args["widgets"]['y_loc_entry'].config(state='disabled')
         shared_data.grid_args["widgets"]['submit_location_button'].config(state='disabled')
 
-        layers = layer(shared_data.grid_args["width"], shared_data.grid_args["height"], shared_data.grid_args["theta_dict"], shared_data.grid_args["grid_occupancy"])
+        layers = []
+        for direction, theta in theta_dict.items():
+            new_layer = layer(shared_data.grid_args["width"], shared_data.grid_args["height"], theta, direction, shared_data.grid_args["grid_occupancy"])
+            layers.append(new_layer)
         visualize_grid(shared_data.grid_args["width"], shared_data.grid_args["height"], shared_data.grid_args["theta_dict"], shared_data.grid_args["grid_occupancy"], shared_data.grid_args["widgets"], layers)
-        setup_screen(shared_data.grid_args["widgets"])
+        setup_screen(shared_data.grid_args["widgets"], layers)
     except ValueError as e:
         widgets['error_label'].config(text=f"Error: {e}")
 
-def setup_screen(widgets):
+def setup_screen(widgets, layers):
     widgets['submit_mov_button'] = tk.Button(master=widgets['side_frame'], text="Veikt kustību 1 soli", width=15, height=2)
     widgets['submit_measure_button'] = tk.Button(master=widgets['side_frame'], text="Veikt mērījumu", width=15, height=2)
     widgets['submit_mov_button'].pack()
     widgets['submit_measure_button'].pack()
-    widgets['submit_mov_buttonn'].bind("<Button-1>", lambda event: movement())
-    widgets['submit_measure_button'].bind("<Button-1>", lambda event: measurement())
+    widgets['submit_mov_button'].bind("<Button-1>", lambda event: movement())
+    widgets['submit_measure_button'].bind("<Button-1>", lambda event: measurement(layers))
 
 def movement():
     raise NotImplemented
 
-def measurement():
-    results = [layer.measure() for layer in layers]
+def measurement(layers):
+    for layer in layers:
+        layer.measure()
+    normalize()
+
+def normalize():
+    # Sum the knowledge across all layers
+    total_sum = np.sum([layer.basics.knowledge for layer in layers])
+    # Avoid division by zero
+    if total_sum != 0:
+        for layer in layers:
+            # Normalize each layer's knowledge
+            layer.basics.knowledge /= total_sum
+    # and then re-visualize
+    visualize_grid(shared_data.grid_args["width"], shared_data.grid_args["height"], shared_data.grid_args["theta_dict"], shared_data.grid_args["grid_occupancy"], shared_data.grid_args["widgets"], layers)
