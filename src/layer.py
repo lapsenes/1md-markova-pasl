@@ -45,68 +45,49 @@ class layer:
         raise NotImplemented
 
     def move(self):
-        movement_probability = 0.8
-        moves = {
-            'right': (self.x + 1, self.y),
-            'up': (self.x, self.y + 1),
-            'left': (self.x - 1, self.y),
-            'down': (self.x, self.y - 1)
-        }
+        print(f"Moving layer with direction={self.direction}")
+        # Create a new knowledge array to store updated values
+        new_knowledge = np.zeros(self.knowledge.shape)
+        move_direction = directions[self.direction]
+        
+        # Probability constants from movement_model
+        p_move = movement_model[0]  # 0.8 probability of moving
+        p_stay = movement_model[1]  # 0.2 probability of staying
 
-        for direction, (new_x, new_y) in moves.items():
-            # is the move in bounds of the grid
-            if 0 <= new_x < self.occupancy.shape[0] and 0 <= new_y < self.occupancy.shape[1]:
-                # is the next spot free
-                if self.occupancy[new_x, new_y] == 0:
-                    if random.random() < movement_probability:
-                        print(f"Moving {direction} to ({new_x}, {new_y})")
-                        self.x, self.y = new_x, new_y
-                        break
-                    else:
-                        print(f"Attempted to move {direction}, but failed due to probability")
-                else:
-                    print(f"Cannot move {direction}, cell ({new_x}, {new_y}) is occupied")
-            else:
-                print(f"Cannot move {direction}, out of bounds")
+        for x in range(self.knowledge.shape[0]):
+            for y in range(self.knowledge.shape[1]):
+                if self.occupancy[y, x] == 1:  # Skip obstacles
+                    continue
 
-                # updated_measurements = np.copy(self.measurement)
-        # for layer, direction in zip(layers, directions):
-        #     dx, dy = direction
-        #     for x in range(shared_data.grid_args["width"]):
-        #         for y in range(shared_data.grid_args["height"]):
-        #             # Skip cells with obstacles
-        #             if shared_data.grid_args["grid_occupancy"][x, y] == 1:
-        #                 continue
-        #             # Determine the previous cell position based on the layer direction
-        #             prev_x, prev_y = x - dx, y - dy
-        #             # Check if the previous cell is out of bounds
-        #             if prev_x < 0 or prev_x >= shared_data.grid_args["width"] or \
-        #             prev_y < 0 or prev_y >= shared_data.grid_args["height"]:
-        #                 updated_measurements[x, y] = measurement_model[0] * self.measurement[x, y]
-        #                 continue
+                # Calculate the position this cell could have come from
+                prev_x = x - move_direction[0]
+                prev_y = y - move_direction[1]
 
-        #             # Check if the previous cell is occupied
-        #             if shared_data.grid_args["grid_occupancy"][prev_x, prev_y] == 1:
-        #                 updated_measurements[x, y] = x_factor * self.measurement[x, y]
-        #                 continue
+                # Current position's contribution (not moving)
+                new_knowledge[y, x] += self.knowledge[y, x] * p_stay
 
-        #             # Apply the full formula if the previous cell is not occupied
-        #             prev_value = self.measurement[prev_x, prev_y]
-        #             current_value = self.measurement[x, y]
-        #             updated_measurements[x, y] = x_factor * prev_value + y_factor * current_value
+                # Add contribution from previous position (if it exists and is not an obstacle)
+                if (0 <= prev_x < self.knowledge.shape[0] and 
+                    0 <= prev_y < self.knowledge.shape[1] and 
+                    self.occupancy[prev_y, prev_x] == 0):
+                    new_knowledge[y, x] += self.knowledge[prev_y, prev_x] * p_move
 
-        # # Update the measurement attribute with the new values
-        # self.measurement = updated_measurements
+        # Update knowledge with new values
+        self.knowledge = new_knowledge
+        
+        # Normalize the knowledge (similar to measurement normalization)
+        total = np.sum(self.knowledge)
+        if total > 0:
+            self.knowledge /= total
+
     
-    def measure(self):
+    def measure(self, simulated_measurement):
         print(f"\nMeasuring for layer with direction={self.direction}, theta={self.theta}")
         print(f"Using direction vector: {directions[self.direction]}")
         # Create a new measurement array
         new_measurement_np = np.zeros((shared_data.grid_args["width"], shared_data.grid_args["height"]))
-        simulated_measurement = 7 # np.random.randint(1, 9)
-        max_possible_distance = max(shared_data.grid_args["width"], shared_data.grid_args["height"])  # Maximum possible distance in the grid
+        max_possible_distance = max(shared_data.grid_args["width"], shared_data.grid_args["height"])
         real_distance = max(shared_data.grid_args["width"], shared_data.grid_args["height"])
-        # adapted_occupancy = np.flipud(shared_data.grid_args["grid_occupancy"])  # Invert the rows of the occupancy grid
 
         for x in range(shared_data.grid_args["width"]):
             for y in range(shared_data.grid_args["height"]):

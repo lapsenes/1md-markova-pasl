@@ -194,23 +194,61 @@ def initialize_layer(window, height, width, theta_dict, grid_occupancy, widgets)
         logging.error(f"Error initializing layer: {e}")
 
 def setup_screen(widgets, layers):
-    widgets['submit_mov_button'] = tk.Button(master=widgets['side_frame'], text="Veikt kustību 1 soli", width=15, height=2)
+    # Add measurement value entry
+    widgets['measurement_label'] = tk.Label(master=widgets['side_frame'], text="Mērījuma vērtība:")
+    widgets['measurement_entry'] = tk.Entry(master=widgets['side_frame'])
+    widgets['measurement_label'].pack()
+    widgets['measurement_entry'].pack()
+
     widgets['submit_measure_button'] = tk.Button(master=widgets['side_frame'], text="Veikt mērījumu", width=15, height=2)
-    widgets['submit_mov_button'].pack()
+    widgets['submit_mov_button'] = tk.Button(master=widgets['side_frame'], text="Veikt kustību 1 soli", width=15, height=2)
+
     widgets['submit_measure_button'].pack()
-    widgets['submit_mov_button'].bind("<Button-1>", lambda event: movement())
-    widgets['submit_measure_button'].bind("<Button-1>", lambda event: measurement(layers))
+    widgets['submit_mov_button'].pack()
+
+    widgets['submit_mov_button'].bind("<Button-1>", lambda event: movement(layers))
+    widgets['submit_measure_button'].bind("<Button-1>", lambda event: measurement(layers, widgets))
     logging.info("Screen setup with movement and measurement buttons.")
 
-def movement():
+def movement(layers):
     logging.info("Movement function called.")
-    raise NotImplemented
-
-def measurement(layers):
-    logging.info("Measurement function called.")
+    
+    # Get current robot orientation and update position accordingly
+    current_rot = shared_data.grid_args["rot"]
+    # Find the layer that matches current rotation
+    current_layer = next(layer for layer in layers if layer.theta == current_rot)
+    move_direction = directions[current_layer.direction]
+    
+    # Calculate new position
+    new_x = shared_data.grid_args["x"] + move_direction[0]
+    new_y = shared_data.grid_args["y"] + move_direction[1]
+    
+    # Check if new position is valid (within bounds and not occupied)
+    if (0 <= new_x < shared_data.grid_args["width"] and 
+        0 <= new_y < shared_data.grid_args["height"] and 
+        shared_data.grid_args["grid_occupancy"][new_y, new_x] == 0):
+        
+        # Update robot position
+        shared_data.grid_args["x"] = new_x
+        shared_data.grid_args["y"] = new_y
+        logging.info(f"Robot moved to position ({new_x}, {new_y})")
+    else:
+        logging.info("Robot cannot move - blocked by obstacle or boundary")
+    
+    # Update knowledge for all layers
     for layer in layers:
-        layer.measure()
+        layer.move()
     normalize(layers)
+
+def measurement(layers, widgets):
+    try:
+        measurement_value = int(widgets['measurement_entry'].get())
+        logging.info(f"Measurement function called with value: {measurement_value}")
+        for layer in layers:
+            layer.measure(measurement_value)
+        normalize(layers)
+    except ValueError:
+        logging.error("Invalid measurement value entered")
 
 def normalize(layers):
     logging.info("Normalizing knowledge across layers.")
