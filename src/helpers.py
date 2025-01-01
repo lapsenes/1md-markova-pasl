@@ -163,14 +163,18 @@ def initialize_layer(window, height, width, theta_dict, grid_occupancy, widgets)
         shared_data.grid_args["y"] = int(widgets['y_loc_entry'].get())
         shared_data.grid_args["rot"] = int(widgets['rot_entry'].get())
 
-        # Generate random grid with input size
-        shared_data.grid_args["grid_occupancy"] = rand_grid(
-            shared_data.grid_args["width"], 
-            shared_data.grid_args["height"]
-        )
+        # Generate random grid only if it doesn't exist yet
+        if shared_data.grid_args["grid_occupancy"] is None:
+            np.random.seed(42)  # For reproducibility
+            shared_data.grid_args["grid_occupancy"] = rand_grid(
+                shared_data.grid_args["width"], 
+                shared_data.grid_args["height"]
+            )
         grid_occupancy = shared_data.grid_args["grid_occupancy"]
 
-        logging.info(f"Grid initialized with size {shared_data.grid_args['width']}x{shared_data.grid_args['height']}")
+        # Make sure the robot's initial position is not occupied
+        grid_occupancy[shared_data.grid_args["x"], shared_data.grid_args["y"]] = 0
+
         logging.info(f"Robot initialized at position ({shared_data.grid_args['x']}, {shared_data.grid_args['y']}) with rotation {shared_data.grid_args['rot']}")
 
         # Disable all input fields after initialization
@@ -192,11 +196,19 @@ def initialize_layer(window, height, width, theta_dict, grid_occupancy, widgets)
         logging.error(f"Error initializing layer: {e}")
 
 def setup_screen(widgets, layers):
-    # Add measurement value entry
+    # Add measurement value entry and virtual movement checkbox
     widgets['measurement_label'] = tk.Label(master=widgets['side_frame'], text="Mērījuma vērtība:")
     widgets['measurement_entry'] = tk.Entry(master=widgets['side_frame'])
+    widgets['virtual_move_var'] = tk.BooleanVar()
+    widgets['virtual_move_check'] = tk.Checkbutton(
+        master=widgets['side_frame'], 
+        text="Virtuālā kustība", 
+        variable=widgets['virtual_move_var']
+    )
+    
     widgets['measurement_label'].pack()
     widgets['measurement_entry'].pack()
+    widgets['virtual_move_check'].pack()
 
     widgets['submit_measure_button'] = tk.Button(master=widgets['side_frame'], text="Veikt mērījumu", width=15, height=2)
     widgets['submit_mov_button'] = tk.Button(master=widgets['side_frame'], text="Veikt kustību 1 soli", width=15, height=2)
@@ -220,7 +232,6 @@ def setup_screen(widgets, layers):
 def movement(layers):
     logging.info("Movement function called.")
     
-    # Get current robot orientation and update position accordingly
     current_rot = shared_data.grid_args["rot"]
     current_layer = next(layer for layer in layers if layer.theta == current_rot)
     move_direction = directions[current_layer.direction]
@@ -229,17 +240,21 @@ def movement(layers):
     new_x = shared_data.grid_args["x"] + move_direction[0]
     new_y = shared_data.grid_args["y"] + move_direction[1]
     
-    # Check if new position is valid (within bounds and not occupied)
-    if (0 <= new_x < shared_data.grid_args["width"] and 
-        0 <= new_y < shared_data.grid_args["height"] and 
-        shared_data.grid_args["grid_occupancy"][new_x, new_y] == 0):  # Changed from [new_y, new_x]
-        
-        # Update robot position
-        shared_data.grid_args["x"] = new_x
-        shared_data.grid_args["y"] = new_y
-        logging.info(f"Robot moved to position ({new_x}, {new_y})")
-    else:
-        logging.info(f"Robot cannot move - blocked by obstacle or boundary at ({new_x}, {new_y})")
+    # Check if movement is virtual or real
+    is_virtual = shared_data.grid_args["widgets"]['virtual_move_var'].get()
+    
+    # Update robot position only if movement is not virtual and position is valid
+    if not is_virtual:
+        if (0 <= new_x < shared_data.grid_args["width"] and 
+            0 <= new_y < shared_data.grid_args["height"] and 
+            shared_data.grid_args["grid_occupancy"][new_x, new_y] == 0):  # Changed from [new_y, new_x]
+            
+            # Update robot position
+            shared_data.grid_args["x"] = new_x
+            shared_data.grid_args["y"] = new_y
+            logging.info(f"Robot moved to position ({new_x}, {new_y})")
+        else:
+            logging.info(f"Robot cannot move - blocked by obstacle or boundary at ({new_x}, {new_y})")
     
     # Update knowledge for all layers
     for layer in layers:
@@ -286,31 +301,24 @@ def get_opposite_direction(direction):
 def rotate_robot(layers, turn_direction):
     logging.info(f"Rotating robot {turn_direction}")
     
-    # Get current robot orientation and layer
-    current_rot = shared_data.grid_args["rot"]
-    current_layer = next(layer for layer in layers if layer.theta == current_rot)
-    
-    # Determine source layer based on inverse rotation
-    if turn_direction == 'cw':
-        source_rot = (current_rot - 90) % 360  # Inverse of clockwise is counter-clockwise
-    else:  # ccw
-        source_rot = (current_rot + 90) % 360  # Inverse of counter-clockwise is clockwise
-    
-    # Find source layer (the layer we're rotating from)
-    source_layer = next(layer for layer in layers if layer.theta == source_rot)
-    
-    # Determine target layer (the layer we're rotating to)
-    if turn_direction == 'cw':
-        new_rot = (current_rot + 90) % 360
-    else:  # ccw
-        new_rot = (current_rot - 90) % 360
-    target_layer = next(layer for layer in layers if layer.theta == new_rot)
-    
-    # Update knowledge using source and target layers
-    target_layer.rotate(source_layer, movement_model[0], movement_model[1])
+    # Update knowledge in all layers using source and current layers
+    for layer in layers:
+        # Determine source layer based on inverse rotation
+        if turn_direction == 'cw':
+            source_rot = (layer.theta - 90) % 360  # Inverse of clockwise is counter-clockwise
+        else:  # ccw
+            source_rot = (layer.theta + 90) % 360  # Inverse of counter-clockwise is clockwise
+        source_layer = next(layer for layer in layers if layer.theta == source_rot)
+        layer.rotate(source_layer, movement_model[0], movement_model[1])
     
     # Update robot's rotation
-    shared_data.grid_args["rot"] = new_rot
-    logging.info(f"Rotation from {source_rot} through {current_rot} to {new_rot}")
-    
+        # Check if movement is virtual or real
+    is_virtual = shared_data.grid_args["widgets"]['virtual_move_var'].get()
+    # Update robot position only if movement is not virtual and position is valid
+    if not is_virtual:
+        current_rot = shared_data.grid_args["rot"]
+        new_rot = (current_rot + 90) % 360 if turn_direction == 'cw' else (current_rot - 90) % 360
+        shared_data.grid_args["rot"] = new_rot
+        logging.info(f"Rotation from {source_rot} through {current_rot} to {new_rot}")
+        
     normalize(layers)
