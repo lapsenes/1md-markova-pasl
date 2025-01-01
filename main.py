@@ -11,8 +11,8 @@ import src.shared_data as shared_data
 
 def handle_submit_size(event):
     try:
-        width = shared_data.grid_args["width"] = int(shared_data.grid_args["widgets"]['width_entry'].get())
-        height = shared_data.grid_args["height"] = int(shared_data.grid_args["widgets"]['height_entry'].get())
+        width = shared_data.grid_args["width"] # = int(shared_data.grid_args["widgets"]['width_entry'].get())
+        height = shared_data.grid_args["height"] # = int(shared_data.grid_args["widgets"]['height_entry'].get())
         shared_data.grid_args["widgets"]['width_entry'].config(state='disabled')
         shared_data.grid_args["widgets"]['height_entry'].config(state='disabled')
         shared_data.grid_args["widgets"]['submit_size'].config(state='disabled')

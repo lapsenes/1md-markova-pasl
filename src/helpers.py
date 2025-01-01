@@ -5,9 +5,12 @@ import tkinter as tk
 from src.layer import *
 import src.shared_data as shared_data
 import matplotlib.colors as mcolors
+import logging
 
+logging.basicConfig(level=logging.INFO)
 
 def rand_grid(width, height):
+    logging.info("Generating random grid.")
     occupancy_array = np.zeros((width, height), dtype=int)
     indices = np.random.choice(width*height, 20, replace=False)
     occupancy_array[np.unravel_index(indices, (width, height))] = 1
@@ -18,6 +21,7 @@ import numpy as np
 import matplotlib.colors as mcolors
 
 def make_grid(width, height, layers, theta_dict, grid_occupancy):
+    logging.info("Creating grid visualization.")
     if grid_occupancy is None:
         shared_data.grid_args["grid_occupancy"] = rand_grid(shared_data.grid_args["width"], shared_data.grid_args["height"])
         grid_occupancy = shared_data.grid_args["grid_occupancy"]
@@ -29,11 +33,26 @@ def make_grid(width, height, layers, theta_dict, grid_occupancy):
     fig, axes = plt.subplots(2, 2, figsize=(10, 10))
     axes = axes.flatten()
 
+    # Create subplot mapping for clockwise arrangement
+    direction_to_subplot = {
+        'up': 1,     # top left
+        'right': 0,  # top right
+        'down': 3,   # bottom left
+        'left': 2    # bottom right
+    }
+
     if layers is not None:
-        # Iterate over each subplot and layer (up to the number of layers)
-        for ax, layer in zip(axes, layers):
+        # Find the global min and max knowledge values across all layers
+        min_val = min(layer.knowledge.min() for layer in layers)
+        max_val = max(layer.knowledge.max() for layer in layers)
+
+        # Sort layers by their intended subplot position
+        sorted_layers = sorted(layers, key=lambda x: direction_to_subplot[x.direction])
+        
+        # Iterate over each subplot and layer
+        for ax, layer in zip(axes, sorted_layers):
             # Display the grid
-            ax.imshow(grid_occupancy, cmap='gray_r', origin='upper', extent=(0, width, 0, height))
+            ax.imshow(grid_occupancy, cmap='gray_r', origin='upper', extent=(0, width, height, 0))
             ax.set_xlabel('X')
             ax.set_ylabel('Y')
             ax.set_aspect('equal')
@@ -41,6 +60,9 @@ def make_grid(width, height, layers, theta_dict, grid_occupancy):
             ax.set_xticks(np.arange(0, width + 1, 1))
             ax.set_yticks(np.arange(0, height + 1, 1))
             ax.tick_params(which='both', length=0)
+
+            # Add headline for each graph
+            ax.set_title(f"Layer Direction: {layer.direction}")
 
             knowledge = layer.knowledge
 
@@ -51,10 +73,11 @@ def make_grid(width, height, layers, theta_dict, grid_occupancy):
                         continue
 
                     if knowledge[i, j] != 0:
-                        # Apply color grading to the knowledge value using the colormap
-                        color = cmap(knowledge[i, j])
-                        ax.add_patch(plt.Rectangle((j, height - (i + 1)), 1, 1, color=color))
-                        ax.text(j + 0.5, height - (i + 0.5), f'{knowledge[i, j]:.2f}', ha='center', va='center', color='black', fontsize=5)
+                        # Normalize the knowledge value to the range [0, 1] for colormap
+                        norm_value = (knowledge[i, j] - min_val) / (max_val - min_val)
+                        color = cmap(norm_value)
+                        ax.add_patch(plt.Rectangle((j, i), 1, 1, color=color))
+                        ax.text(j + 0.5, i + 0.5, f'{knowledge[i, j]:.2f}', ha='center', va='center', color='black', fontsize=5)
 
             # Plot the robot position and orientation if it is the right layer
             if shared_data.grid_args["rot"] == layer.theta:
@@ -79,6 +102,10 @@ def make_grid(width, height, layers, theta_dict, grid_occupancy):
             ax.tick_params(which='both', length=0)
 
     plt.tight_layout()
+    if layers is not None:
+        print("Layer directions:", [layer.direction for layer in layers])
+        print("Axes order:", [i for i in range(len(axes))])
+    logging.info("Grid visualization created.")
     return fig
 
 def visualize_grid(width, height, theta_dict, grid_occupancy, widgets, layers=None):
@@ -90,11 +117,12 @@ def visualize_grid(width, height, theta_dict, grid_occupancy, widgets, layers=No
     canvas = FigureCanvasTkAgg(fig, master=widgets['action_frame'])
     canvas.draw()
     canvas.get_tk_widget().pack()
+    logging.info("Grid visualization displayed.")
 
 def export_grid():
+    logging.info("Exporting grid state.")
     grid_state = []
     grid_array = np.array(grid_state)
-
 
 def ask_location(window, width, height, location_entries, widgets, grid_occupancy, theta_dict):
     if "x_loc_entry" not in location_entries and "y_loc_entry" not in location_entries:
@@ -117,32 +145,53 @@ def ask_location(window, width, height, location_entries, widgets, grid_occupanc
         location_entries["x_loc_entry"] = widgets['x_loc_entry']
         location_entries["y_loc_entry"] = widgets['y_loc_entry']
         location_entries["rot_entry"] = widgets['rot_entry']
-        print("Entry widgets created.")
+        logging.info("Entry widgets created.")
         widgets['submit_location_button'].bind("<Button-1>", lambda event: initialize_layer(window, shared_data.grid_args["width"], shared_data.grid_args["height"], shared_data.grid_args["theta_dict"], shared_data.grid_args["grid_occupancy"], shared_data.grid_args["widgets"]))
         
     else:
         location_entries["x_loc_entry"].delete(0, tk.END)
         location_entries["y_loc_entry"].delete(0, tk.END)
-        print("Entry widgets already exist, clearing content.")
+        logging.info("Entry widgets already exist, clearing content.")
+
 
 def initialize_layer(window, height, width, theta_dict, grid_occupancy, widgets):
     try:
-        shared_data.grid_args["x"] = int(widgets['x_loc_entry'].get())
-        shared_data.grid_args["y"] = int(widgets['y_loc_entry'].get())
-        shared_data.grid_args["rot"] = int(widgets['rot_entry'].get())
+        # Commented out the original code for setting the robot's initial position and rotation
+        # shared_data.grid_args["x"] = int(widgets['x_loc_entry'].get())
+        # shared_data.grid_args["y"] = int(widgets['y_loc_entry'].get())
+        # shared_data.grid_args["rot"] = int(widgets['rot_entry'].get())
+
+        # Overwrite the robot's initial position and rotation
+        shared_data.grid_args["x"] = 3
+        shared_data.grid_args["y"] = 3
+        shared_data.grid_args["rot"] = 0
+
+        # Commented out the original code for generating a random grid
+        # if shared_data.grid_args["grid_occupancy"] is None:
+        #     shared_data.grid_args["grid_occupancy"] = rand_grid(shared_data.grid_args["width"], shared_data.grid_args["height"])
+
+        # Use a more random occupancy array that is not occupied in (3, 3)
+        np.random.seed(42)  # For reproducibility
+        shared_data.grid_args["grid_occupancy"] = np.random.choice([0, 1], size=(12, 12), p=[0.8, 0.2])
+        shared_data.grid_args["grid_occupancy"][3, 3] = 0  # Ensure (3, 3) is not occupied
+        grid_occupancy = shared_data.grid_args["grid_occupancy"]
 
         shared_data.grid_args["widgets"]['x_loc_entry'].config(state='disabled')
         shared_data.grid_args["widgets"]['y_loc_entry'].config(state='disabled')
         shared_data.grid_args["widgets"]['submit_location_button'].config(state='disabled')
 
         layers = []
+        print("Initializing layers in order:")
         for direction, theta in theta_dict.items():
+            print(f"Creating layer: direction={direction}, theta={theta}")
             new_layer = layer(shared_data.grid_args["width"], shared_data.grid_args["height"], theta, direction, shared_data.grid_args["grid_occupancy"])
             layers.append(new_layer)
         visualize_grid(shared_data.grid_args["width"], shared_data.grid_args["height"], shared_data.grid_args["theta_dict"], shared_data.grid_args["grid_occupancy"], shared_data.grid_args["widgets"], layers)
         setup_screen(shared_data.grid_args["widgets"], layers)
+        logging.info("Layer initialized.")
     except ValueError as e:
         widgets['error_label'].config(text=f"Error: {e}")
+        logging.error(f"Error initializing layer: {e}")
 
 def setup_screen(widgets, layers):
     widgets['submit_mov_button'] = tk.Button(master=widgets['side_frame'], text="Veikt kustību 1 soli", width=15, height=2)
@@ -151,22 +200,32 @@ def setup_screen(widgets, layers):
     widgets['submit_measure_button'].pack()
     widgets['submit_mov_button'].bind("<Button-1>", lambda event: movement())
     widgets['submit_measure_button'].bind("<Button-1>", lambda event: measurement(layers))
+    logging.info("Screen setup with movement and measurement buttons.")
 
 def movement():
+    logging.info("Movement function called.")
     raise NotImplemented
 
 def measurement(layers):
+    logging.info("Measurement function called.")
     for layer in layers:
         layer.measure()
-    normalize()
+    normalize(layers)
 
-def normalize():
+def normalize(layers):
+    logging.info("Normalizing knowledge across layers.")
     # Sum the knowledge across all layers
-    total_sum = np.sum([layer.basics.knowledge for layer in layers])
+    total_sum = np.sum([layer.knowledge for layer in layers])
     # Avoid division by zero
     if total_sum != 0:
         for layer in layers:
             # Normalize each layer's knowledge
-            layer.basics.knowledge /= total_sum
+            layer.knowledge /= total_sum
+            # Print the normalized knowledge array
+            logging.info(f"Normalized knowledge for layer with direction {layer.direction}:")
+            logging.info(layer.knowledge)
+    new_total_sum = np.sum([layer.knowledge for layer in layers])
+    logging.info(f"New total sum: {new_total_sum}")
     # and then re-visualize
     visualize_grid(shared_data.grid_args["width"], shared_data.grid_args["height"], shared_data.grid_args["theta_dict"], shared_data.grid_args["grid_occupancy"], shared_data.grid_args["widgets"], layers)
+    logging.info("Normalized knowledge.")

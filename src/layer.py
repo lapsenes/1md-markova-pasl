@@ -3,7 +3,12 @@ import numpy as np
 import src.shared_data as shared_data
 
 layers = 4
-directions = [(0, 1), (-1, 0), (0, -1), (1, 0)]
+directions = {
+    'right': [1, 0],
+    'up': [0, -1],
+    'left': [-1, 0],
+    'down': [0, 1]
+}
 """
 pārvietojuma modelis:
 0.8: plānotā kustība notiek
@@ -53,7 +58,6 @@ class layer:
             if 0 <= new_x < self.occupancy.shape[0] and 0 <= new_y < self.occupancy.shape[1]:
                 # is the next spot free
                 if self.occupancy[new_x, new_y] == 0:
-                    
                     if random.random() < movement_probability:
                         print(f"Moving {direction} to ({new_x}, {new_y})")
                         self.x, self.y = new_x, new_y
@@ -65,8 +69,7 @@ class layer:
             else:
                 print(f"Cannot move {direction}, out of bounds")
 
-
-        #         updated_measurements = np.copy(self.measurement)
+                # updated_measurements = np.copy(self.measurement)
         # for layer, direction in zip(layers, directions):
         #     dx, dy = direction
         #     for x in range(shared_data.grid_args["width"]):
@@ -96,39 +99,44 @@ class layer:
         # self.measurement = updated_measurements
     
     def measure(self):
+        print(f"\nMeasuring for layer with direction={self.direction}, theta={self.theta}")
+        print(f"Using direction vector: {directions[self.direction]}")
         # Create a new measurement array
         new_measurement_np = np.zeros((shared_data.grid_args["width"], shared_data.grid_args["height"]))
-        simulated_measurement = np.random.randint(1, 9)
+        simulated_measurement = 7 # np.random.randint(1, 9)
         max_possible_distance = max(shared_data.grid_args["width"], shared_data.grid_args["height"])  # Maximum possible distance in the grid
         real_distance = max(shared_data.grid_args["width"], shared_data.grid_args["height"])
+        # adapted_occupancy = np.flipud(shared_data.grid_args["grid_occupancy"])  # Invert the rows of the occupancy grid
 
         for x in range(shared_data.grid_args["width"]):
             for y in range(shared_data.grid_args["height"]):
                 # Skip cells with obstacles
-                if shared_data.grid_args["grid_occupancy"][x, y] == 1:
+                if shared_data.grid_args["grid_occupancy"][y, x] == 1:
                     continue
-                for step in range(1, real_distance + 1):  # Step through possible distances
-                    nx, ny = x + step * self.direction[0], y + step * self.direction[1]
+                direction_values = directions[self.direction]  # Get the direction values from the dictionary
+                for step in range(1, max_possible_distance + 1):  # Step through possible distances
+                    
+                    nx, ny = x + step * direction_values[0], y + step * direction_values[1]
 
                     # Check if we've reached the grid boundary
                     if nx < 0 or nx >= shared_data.grid_args["width"] or ny < 0 or ny >= shared_data.grid_args["height"]:
                         real_distance = step
                         break
                     # Check if an obstacle is found
-                    if shared_data.grid_args["grid_occupancy"][nx, ny] == 1:
+                    if shared_data.grid_args["grid_occupancy"][ny, nx] == 1:
                         real_distance = step
                         break
 
                 # Assign probabilities based on simulated and real distances
                 if simulated_measurement == real_distance:
-                    self.measurement[x, y] = 0.85
+                    self.measurement[y, x] = 0.85
                 elif abs(simulated_measurement - real_distance) == 1:
-                    self.measurement[x, y] = 0.1
+                    self.measurement[y, x] = 0.1
                 else:
-                    self.measurement[x, y] = 0.05
+                    self.measurement[y, x] = 0.05
 
         # Perform element-wise multiplication and update knowledge
-        self.basics.knowledge *= self.measurement
+        self.knowledge *= self.measurement
 
     
     def print_knowledge():

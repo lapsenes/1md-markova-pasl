@@ -1,6 +1,6 @@
 grid_args = {
-    "width": None,
-    "height": None,
+    "width": 12,  # Hardcoded width
+    "height": 12,  # Hardcoded height
     "grid_occupancy": None,
     "x": None,
     "y": None,
