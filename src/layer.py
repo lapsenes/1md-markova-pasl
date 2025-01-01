@@ -56,7 +56,7 @@ class layer:
 
         for x in range(self.knowledge.shape[0]):
             for y in range(self.knowledge.shape[1]):
-                if self.occupancy[y, x] == 1:  # Skip obstacles
+                if self.occupancy[x, y] == 1:  # Skip obstacles
                     continue
 
                 # Calculate the position this cell could have come from
@@ -64,13 +64,13 @@ class layer:
                 prev_y = y - move_direction[1]
 
                 # Current position's contribution (not moving)
-                new_knowledge[y, x] += self.knowledge[y, x] * p_stay
+                new_knowledge[x, y] += self.knowledge[x, y] * p_stay  
 
                 # Add contribution from previous position (if it exists and is not an obstacle)
                 if (0 <= prev_x < self.knowledge.shape[0] and 
                     0 <= prev_y < self.knowledge.shape[1] and 
-                    self.occupancy[prev_y, prev_x] == 0):
-                    new_knowledge[y, x] += self.knowledge[prev_y, prev_x] * p_move
+                    self.occupancy[prev_x, prev_y] == 0):
+                    new_knowledge[x, y] += self.knowledge[prev_x, prev_y] * p_move
 
         # Update knowledge with new values
         self.knowledge = new_knowledge
@@ -92,7 +92,7 @@ class layer:
         for x in range(shared_data.grid_args["width"]):
             for y in range(shared_data.grid_args["height"]):
                 # Skip cells with obstacles
-                if shared_data.grid_args["grid_occupancy"][y, x] == 1:
+                if shared_data.grid_args["grid_occupancy"][x, y] == 1: 
                     continue
                 direction_values = directions[self.direction]  # Get the direction values from the dictionary
                 for step in range(1, max_possible_distance + 1):  # Step through possible distances
@@ -104,20 +104,37 @@ class layer:
                         real_distance = step
                         break
                     # Check if an obstacle is found
-                    if shared_data.grid_args["grid_occupancy"][ny, nx] == 1:
+                    if shared_data.grid_args["grid_occupancy"][nx, ny] == 1:  
                         real_distance = step
                         break
 
                 # Assign probabilities based on simulated and real distances
                 if simulated_measurement == real_distance:
-                    self.measurement[y, x] = 0.85
+                    self.measurement[x, y] = 0.85  
                 elif abs(simulated_measurement - real_distance) == 1:
-                    self.measurement[y, x] = 0.1
+                    self.measurement[x, y] = 0.1  
                 else:
-                    self.measurement[y, x] = 0.05
+                    self.measurement[x, y] = 0.05  
 
         # Perform element-wise multiplication and update knowledge
         self.knowledge *= self.measurement
+
+    def rotate(self, source_layer, p_move, p_stay):
+        """Update knowledge based on rotation probabilities"""
+        print(f"Rotating in layer with direction={self.direction}")
+        new_knowledge = np.zeros_like(self.knowledge)
+        
+        # Update each cell's knowledge
+        for x in range(self.knowledge.shape[0]):
+            for y in range(self.knowledge.shape[1]):
+                if self.occupancy[x, y] == 1:
+                    continue
+                # Current position stays with p_stay probability
+                # Previous position contributes with p_move probability
+                new_knowledge[x, y] = (self.knowledge[x, y] * p_stay + 
+                                     source_layer.knowledge[x, y] * p_move)
+        
+        self.knowledge = new_knowledge
 
     
     def print_knowledge():

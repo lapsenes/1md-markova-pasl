@@ -14,6 +14,7 @@ def rand_grid(width, height):
     occupancy_array = np.zeros((width, height), dtype=int)
     indices = np.random.choice(width*height, 20, replace=False)
     occupancy_array[np.unravel_index(indices, (width, height))] = 1
+    np.swapaxes(occupancy_array, 0, 1)
     return occupancy_array
 
 import matplotlib.pyplot as plt
@@ -25,6 +26,7 @@ def make_grid(width, height, layers, theta_dict, grid_occupancy):
     if grid_occupancy is None:
         shared_data.grid_args["grid_occupancy"] = rand_grid(shared_data.grid_args["width"], shared_data.grid_args["height"])
         grid_occupancy = shared_data.grid_args["grid_occupancy"]
+    occupancy_for_visualize = grid_occupancy.swapaxes(0, 1)
 
     # Create a custom red-to-green colormap
     colors = [(1, 0, 0, 0.3), (0, 1, 0, 0.3)]  # Red to Green
@@ -52,7 +54,7 @@ def make_grid(width, height, layers, theta_dict, grid_occupancy):
         # Iterate over each subplot and layer
         for ax, layer in zip(axes, sorted_layers):
             # Display the grid
-            ax.imshow(grid_occupancy, cmap='gray_r', origin='upper', extent=(0, width, height, 0))
+            ax.imshow(occupancy_for_visualize, cmap='gray_r', origin='upper', extent=(0, width, height, 0))
             ax.set_xlabel('X')
             ax.set_ylabel('Y')
             ax.set_aspect('equal')
@@ -64,25 +66,25 @@ def make_grid(width, height, layers, theta_dict, grid_occupancy):
             # Add headline for each graph
             ax.set_title(f"Layer Direction: {layer.direction}")
 
-            knowledge = layer.knowledge
+            knowledge_for_visualize = layer.knowledge.swapaxes(0, 1)
 
-            for i in range(knowledge.shape[0]):
-                for j in range(knowledge.shape[1]):
+            for i in range(knowledge_for_visualize.shape[0]):
+                for j in range(knowledge_for_visualize.shape[1]):
                     # Skip if the grid_occupancy cell is 1 (occupied)
-                    if grid_occupancy[i, j] == 1:
+                    if occupancy_for_visualize[i, j] == 1:
                         continue
 
-                    if knowledge[i, j] != 0:
+                    if knowledge_for_visualize[i, j] != 0:
                         # Normalize the knowledge value to the range [0, 1] for colormap
-                        norm_value = (knowledge[i, j] - min_val) / (max_val - min_val)
+                        norm_value = (knowledge_for_visualize[i, j] - min_val) / (max_val - min_val)
                         color = cmap(norm_value)
                         ax.add_patch(plt.Rectangle((j, i), 1, 1, color=color))
-                        ax.text(j + 0.5, i + 0.5, f'{knowledge[i, j]:.2f}', ha='center', va='center', color='black', fontsize=5)
+                        ax.text(j + 0.5, i + 0.5, f'{knowledge_for_visualize[i, j]:.2f}', ha='center', va='center', color='black', fontsize=5)
 
             # Plot the robot position and orientation if it is the right layer
             if shared_data.grid_args["rot"] == layer.theta:
-                center_x = shared_data.grid_args['x'] - 0.5
-                center_y = shared_data.grid_args['y'] - 0.5
+                center_x = shared_data.grid_args['x'] + 0.5
+                center_y = shared_data.grid_args['y'] + 0.5
                 ax.plot(center_x, center_y, marker='o', color='red', markersize=6)
                 theta = theta_dict[layer.direction]
                 ax.arrow(center_x, center_y, 0.5 * np.cos(np.radians(theta)), 
@@ -156,26 +158,22 @@ def ask_location(window, width, height, location_entries, widgets, grid_occupanc
 
 def initialize_layer(window, height, width, theta_dict, grid_occupancy, widgets):
     try:
-        # Commented out the original code for setting the robot's initial position and rotation
-        # shared_data.grid_args["x"] = int(widgets['x_loc_entry'].get())
-        # shared_data.grid_args["y"] = int(widgets['y_loc_entry'].get())
-        # shared_data.grid_args["rot"] = int(widgets['rot_entry'].get())
+        # Get robot position and rotation
+        shared_data.grid_args["x"] = int(widgets['x_loc_entry'].get())
+        shared_data.grid_args["y"] = int(widgets['y_loc_entry'].get())
+        shared_data.grid_args["rot"] = int(widgets['rot_entry'].get())
 
-        # Overwrite the robot's initial position and rotation
-        shared_data.grid_args["x"] = 3
-        shared_data.grid_args["y"] = 3
-        shared_data.grid_args["rot"] = 0
-
-        # Commented out the original code for generating a random grid
-        # if shared_data.grid_args["grid_occupancy"] is None:
-        #     shared_data.grid_args["grid_occupancy"] = rand_grid(shared_data.grid_args["width"], shared_data.grid_args["height"])
-
-        # Use a more random occupancy array that is not occupied in (3, 3)
-        np.random.seed(42)  # For reproducibility
-        shared_data.grid_args["grid_occupancy"] = np.random.choice([0, 1], size=(12, 12), p=[0.8, 0.2])
-        shared_data.grid_args["grid_occupancy"][3, 3] = 0  # Ensure (3, 3) is not occupied
+        # Generate random grid with input size
+        shared_data.grid_args["grid_occupancy"] = rand_grid(
+            shared_data.grid_args["width"], 
+            shared_data.grid_args["height"]
+        )
         grid_occupancy = shared_data.grid_args["grid_occupancy"]
 
+        logging.info(f"Grid initialized with size {shared_data.grid_args['width']}x{shared_data.grid_args['height']}")
+        logging.info(f"Robot initialized at position ({shared_data.grid_args['x']}, {shared_data.grid_args['y']}) with rotation {shared_data.grid_args['rot']}")
+
+        # Disable all input fields after initialization
         shared_data.grid_args["widgets"]['x_loc_entry'].config(state='disabled')
         shared_data.grid_args["widgets"]['y_loc_entry'].config(state='disabled')
         shared_data.grid_args["widgets"]['submit_location_button'].config(state='disabled')
@@ -208,6 +206,15 @@ def setup_screen(widgets, layers):
 
     widgets['submit_mov_button'].bind("<Button-1>", lambda event: movement(layers))
     widgets['submit_measure_button'].bind("<Button-1>", lambda event: measurement(layers, widgets))
+
+    # Add rotation buttons
+    widgets['rotate_cw_button'] = tk.Button(master=widgets['side_frame'], text="Pagriezties pa labi", width=15, height=2)
+    widgets['rotate_ccw_button'] = tk.Button(master=widgets['side_frame'], text="Pagriezties pa kreisi", width=15, height=2)
+    widgets['rotate_cw_button'].pack()
+    widgets['rotate_ccw_button'].pack()
+    
+    widgets['rotate_cw_button'].bind("<Button-1>", lambda event: rotate_robot(layers, 'cw'))
+    widgets['rotate_ccw_button'].bind("<Button-1>", lambda event: rotate_robot(layers, 'ccw'))
     logging.info("Screen setup with movement and measurement buttons.")
 
 def movement(layers):
@@ -215,7 +222,6 @@ def movement(layers):
     
     # Get current robot orientation and update position accordingly
     current_rot = shared_data.grid_args["rot"]
-    # Find the layer that matches current rotation
     current_layer = next(layer for layer in layers if layer.theta == current_rot)
     move_direction = directions[current_layer.direction]
     
@@ -226,14 +232,14 @@ def movement(layers):
     # Check if new position is valid (within bounds and not occupied)
     if (0 <= new_x < shared_data.grid_args["width"] and 
         0 <= new_y < shared_data.grid_args["height"] and 
-        shared_data.grid_args["grid_occupancy"][new_y, new_x] == 0):
+        shared_data.grid_args["grid_occupancy"][new_x, new_y] == 0):  # Changed from [new_y, new_x]
         
         # Update robot position
         shared_data.grid_args["x"] = new_x
         shared_data.grid_args["y"] = new_y
         logging.info(f"Robot moved to position ({new_x}, {new_y})")
     else:
-        logging.info("Robot cannot move - blocked by obstacle or boundary")
+        logging.info(f"Robot cannot move - blocked by obstacle or boundary at ({new_x}, {new_y})")
     
     # Update knowledge for all layers
     for layer in layers:
@@ -261,9 +267,50 @@ def normalize(layers):
             layer.knowledge /= total_sum
             # Print the normalized knowledge array
             logging.info(f"Normalized knowledge for layer with direction {layer.direction}:")
-            logging.info(layer.knowledge)
+            # logging.info(layer.knowledge)
     new_total_sum = np.sum([layer.knowledge for layer in layers])
     logging.info(f"New total sum: {new_total_sum}")
     # and then re-visualize
     visualize_grid(shared_data.grid_args["width"], shared_data.grid_args["height"], shared_data.grid_args["theta_dict"], shared_data.grid_args["grid_occupancy"], shared_data.grid_args["widgets"], layers)
     logging.info("Normalized knowledge.")
+
+def get_opposite_direction(direction):
+    opposites = {
+        'right': 'left',
+        'left': 'right',
+        'up': 'down',
+        'down': 'up'
+    }
+    return opposites[direction]
+
+def rotate_robot(layers, turn_direction):
+    logging.info(f"Rotating robot {turn_direction}")
+    
+    # Get current robot orientation and layer
+    current_rot = shared_data.grid_args["rot"]
+    current_layer = next(layer for layer in layers if layer.theta == current_rot)
+    
+    # Determine source layer based on inverse rotation
+    if turn_direction == 'cw':
+        source_rot = (current_rot - 90) % 360  # Inverse of clockwise is counter-clockwise
+    else:  # ccw
+        source_rot = (current_rot + 90) % 360  # Inverse of counter-clockwise is clockwise
+    
+    # Find source layer (the layer we're rotating from)
+    source_layer = next(layer for layer in layers if layer.theta == source_rot)
+    
+    # Determine target layer (the layer we're rotating to)
+    if turn_direction == 'cw':
+        new_rot = (current_rot + 90) % 360
+    else:  # ccw
+        new_rot = (current_rot - 90) % 360
+    target_layer = next(layer for layer in layers if layer.theta == new_rot)
+    
+    # Update knowledge using source and target layers
+    target_layer.rotate(source_layer, movement_model[0], movement_model[1])
+    
+    # Update robot's rotation
+    shared_data.grid_args["rot"] = new_rot
+    logging.info(f"Rotation from {source_rot} through {current_rot} to {new_rot}")
+    
+    normalize(layers)
